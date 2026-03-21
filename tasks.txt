@@ -1,0 +1,30 @@
+# task - add buttons for folder navigation
+- to the left of folder textbox add to buttons: .. ~ /
+- .. - navigate to parrent folder
+- ~ - navigate to home folder
+- / navigate to root folder
+- when user hits enter while in folder textbox, try to navigate to that path (if tha path is folder and folder exists)
+
+
+# task - edit file pane settings
+- change background to #333333
+- use monospaced font for headers and cells
+- remove row numbers
+- remove visible borders from pane grid cells
+- resize attr column: it should be narrow and fixed width of 5 chars
+- auto size date columns so it shows all the data in the cell
+- make it fixed length of 5 chars
+- filename: make it consume all remaining space
+
+# task - handle window resize
+- set minimum window size of 1000x800
+
+# task - change mouse selct behavior in file pane
+- left or right clicking a row highlits it: background of all cells in that row is black
+- right clicking a row must toggle it between selected/unselected
+- selected row: text color bright red
+- unselected row: text color bright green
+- draging right mouse multi-toggles state of selection based on where drag started:
+  - example 1: user clicked on unselected file and dragged over two more files, since first file got selected than other two files have to become selected
+  - example 2: user clicked on selected file and dragged over two more files, since first file got unselected than other two files have to become unselected
+

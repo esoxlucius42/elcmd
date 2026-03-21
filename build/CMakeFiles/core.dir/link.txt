@@ -1,0 +1,2 @@
+/usr/bin/ar qc libcore.a CMakeFiles/core.dir/core_autogen/mocs_compilation.cpp.o CMakeFiles/core.dir/src/FileModel.cpp.o CMakeFiles/core.dir/src/FileService.cpp.o CMakeFiles/core.dir/src/ArchiveService.cpp.o
+/usr/bin/ranlib libcore.a
