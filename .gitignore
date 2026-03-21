@@ -1,0 +1,12 @@
+build/
+artifacts/
+*.o
+*.a
+*.so
+*.dll
+*.exe
+*.log
+*.user
+*.pro.user
+.vscode/
+*.qrc
