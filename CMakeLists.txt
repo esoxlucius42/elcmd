@@ -16,9 +16,6 @@ add_library(core STATIC
     src/ArchiveService.cpp
 )
 
-target_include_directories(core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
-target_link_libraries(core PUBLIC Qt6::Core Qt6::Concurrent)
-
 add_executable(elcmd
     src/main.cpp
     src/PaneWidget.cpp
@@ -26,7 +23,18 @@ add_executable(elcmd
     src/ConflictDialog.cpp
 )
 
-target_include_directories(elcmd PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_include_directories(core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(core PUBLIC Qt6::Core Qt6::Concurrent Qt6::Widgets)
+
+# Optional: link with libarchive if available for robust archive handling
+find_library(LIBARCHIVE_LIBRARY NAMES archive libarchive)
+if(LIBARCHIVE_LIBRARY)
+    message(STATUS "Found libarchive: ${LIBARCHIVE_LIBRARY}")
+    target_link_libraries(core PUBLIC ${LIBARCHIVE_LIBRARY})
+    target_compile_definitions(core PUBLIC HAVE_LIBARCHIVE)
+endif()
+
+
 target_link_libraries(elcmd PRIVATE Qt6::Widgets core)
 
 # Tests
@@ -42,3 +50,17 @@ add_test(NAME fileservice_test COMMAND test_fileservice)
 add_executable(test_paneops tests/TestPaneOps.cpp)
 target_link_libraries(test_paneops PRIVATE Qt6::Test core)
 add_test(NAME paneops_test COMMAND test_paneops)
+
+add_executable(test_rightclick tests/TestRightClick.cpp src/PaneWidget.cpp src/ArchiveViewerDialog.cpp src/ConflictDialog.cpp)
+target_link_libraries(test_rightclick PRIVATE Qt6::Test Qt6::Widgets core)
+add_test(NAME rightclick_test COMMAND test_rightclick)
+
+# Installation and packaging (CPack)
+install(TARGETS elcmd RUNTIME DESTINATION bin)
+install(TARGETS core ARCHIVE DESTINATION lib)
+install(DIRECTORY src/ DESTINATION share/elcmd)
+
+set(CPACK_PACKAGE_NAME "elcmd")
+set(CPACK_PACKAGE_VERSION ${PROJECT_VERSION})
+set(CPACK_GENERATOR "TGZ")
+include(CPack)

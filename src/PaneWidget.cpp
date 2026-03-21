@@ -1,5 +1,6 @@
 #include "PaneWidget.h"
 #include <QTableView>
+#include <QHeaderView>
 #include <QVBoxLayout>
 #include <QLineEdit>
 #include <QDir>
@@ -24,9 +25,15 @@ PaneWidget::PaneWidget(QWidget *parent) : QWidget(parent) {
 
     // basic appearance per spec
     m_view->setStyleSheet("QTableView { background-color: #3a3a3a; color: #00ff00; gridline-color: #222; } QTableView::item:selected { background-color: #7f0000; color: #ffffff; }");
+    m_view->setAlternatingRowColors(true);
+    m_view->horizontalHeader()->setStretchLastSection(false);
+    m_view->horizontalHeader()->setSectionsClickable(true);
+    m_view->setSortingEnabled(true);
+    m_view->setAccessibleName("File list pane");
 
     m_pathEdit = new QLineEdit(this);
     m_pathEdit->setText(QDir::currentPath());
+    m_pathEdit->setAccessibleName("Path editor");
 
     QVBoxLayout *l = new QVBoxLayout(this);
     l->setContentsMargins(2,2,2,2);
@@ -55,6 +62,10 @@ PaneWidget::PaneWidget(QWidget *parent) : QWidget(parent) {
 
 FileModel* PaneWidget::model() const { return m_model; }
 
+void PaneWidget::setRightClickMode(RightClickMode mode) { m_rightClickMode = mode; }
+
+PaneWidget::RightClickMode PaneWidget::rightClickMode() const { return m_rightClickMode; }
+
 QString PaneWidget::currentPath() const { return m_pathEdit->text(); }
 
 QStringList PaneWidget::selectedPaths() const {
@@ -78,7 +89,14 @@ bool PaneWidget::eventFilter(QObject *obj, QEvent *event) {
             QModelIndex idx = m_view->indexAt(me->pos());
             if (idx.isValid()) {
                 QItemSelectionModel *sel = m_view->selectionModel();
-                if (!sel->isSelected(idx)) {
+                // behavior depends on preference
+                if (m_rightClickMode == SelectOnRightClick) {
+                    if (!sel->isSelected(idx)) {
+                        sel->select(idx, QItemSelectionModel::Select | QItemSelectionModel::Rows);
+                    }
+                }
+                // if ContextOnSelected and item not selected, select it first then show context menu
+                if (m_rightClickMode == ContextOnSelected && !sel->isSelected(idx)) {
                     sel->select(idx, QItemSelectionModel::Select | QItemSelectionModel::Rows);
                 }
 

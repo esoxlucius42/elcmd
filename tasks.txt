@@ -13,6 +13,7 @@
 - remove visible borders from pane grid cells
 - resize attr column: it should be narrow and fixed width of 5 chars
 - auto size date columns so it shows all the data in the cell
+- rename date to modified
 - make it fixed length of 5 chars
 - filename: make it consume all remaining space
 

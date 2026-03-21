@@ -19,6 +19,11 @@ public:
     QStringList selectedPaths() const;
     void refresh();
 
+    // right-click behavior preference
+    enum RightClickMode { ContextOnSelected, SelectOnRightClick };
+    void setRightClickMode(RightClickMode mode);
+    RightClickMode rightClickMode() const;
+
 signals:
     void selectionChanged(const QString &path);
 
@@ -32,4 +37,5 @@ private:
     QLineEdit *m_pathEdit;
     QTableView *m_view;
     FileModel *m_model;
+    RightClickMode m_rightClickMode = SelectOnRightClick; // default per spec
 };
