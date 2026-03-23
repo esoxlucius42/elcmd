@@ -37,8 +37,8 @@ int main(int argc, char **argv) {
     QWidget *central = new QWidget();
     QHBoxLayout *layout = new QHBoxLayout();
 
-    PaneWidget *left = new PaneWidget();
-    PaneWidget *right = new PaneWidget();
+    PaneWidget *left = new PaneWidget(PaneWidget::SelectOnRightClick, true);
+    PaneWidget *right = new PaneWidget(PaneWidget::SelectOnRightClick, true);
     layout->addWidget(left);
     layout->addWidget(right);
 
@@ -46,10 +46,14 @@ int main(int argc, char **argv) {
     QShortcut *tabSwitch = new QShortcut(QKeySequence(Qt::Key_Tab), &win);
 
     // track which pane is active and last selected path
-    PaneWidget *active = left;
+    PaneWidget *active = nullptr;
     QString lastPath;
 
-    auto setActive = [&](PaneWidget *p){ active = p; p->setActive(true); p->focusView(); };
+    auto setActive = [&](PaneWidget *p){
+        if (active && active != p) active->setActive(false);
+        active = p;
+        if (active) { active->setActive(true); active->focusView(); }
+    };
 
     // set initial active pane
     setActive(left);
@@ -109,12 +113,12 @@ int main(int argc, char **argv) {
     QObject::connect(left, &PaneWidget::selectionChanged, [&](const QString &path){
         lastSelected->setText(path);
         lastPath = path;
-        active = left;
+        setActive(left);
     });
     QObject::connect(right, &PaneWidget::selectionChanged, [&](const QString &path){
         lastSelected->setText(path);
         lastPath = path;
-        active = right;
+        setActive(right);
     });
 
     // F3: internal viewer (small text files)

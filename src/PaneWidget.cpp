@@ -18,7 +18,7 @@
 #include "FileModel.h"
 #include "ArchiveViewerDialog.h"
 
-PaneWidget::PaneWidget(QWidget *parent) : QWidget(parent) {
+PaneWidget::PaneWidget(RightClickMode mode, bool useLeftStyling, QWidget *parent) : QWidget(parent), m_rightClickMode(mode) {
     m_model = new FileModel(this);
     m_view = new QTableView(this);
     m_view->setModel(m_model);
@@ -81,14 +81,25 @@ PaneWidget::PaneWidget(QWidget *parent) : QWidget(parent) {
     // connect selection change
     connect(m_view->selectionModel(), &QItemSelectionModel::selectionChanged, this, &PaneWidget::onSelectionChanged);
     connect(m_view, &QTableView::doubleClicked, this, [this](const QModelIndex &idx){
-        QString ext = m_model->data(m_model->index(idx.row(), 1)).toString().toLower();
         QString name = m_model->data(m_model->index(idx.row(), 0)).toString();
         QString full = QDir(m_pathEdit->text()).filePath(name);
+        QFileInfo fi(full);
+        if (!fi.exists()) return;
+        if (fi.isDir()) {
+            // navigate into directory
+            m_pathEdit->setText(fi.absoluteFilePath());
+            m_model->setPath(fi.absoluteFilePath());
+            return;
+        }
+        // handle archives specially
+        QString ext = fi.suffix().toLower();
         if (ext == "zip" || ext == "tar" || ext == "tgz" || ext == "gz") {
-            // show archive viewer
             ArchiveViewerDialog dlg(full, this);
             dlg.exec();
+            return;
         }
+        // for text-like files or any other file, open with system default
+        QDesktopServices::openUrl(QUrl::fromLocalFile(full));
     });
 
     // navigation handlers
@@ -166,9 +177,21 @@ bool PaneWidget::eventFilter(QObject *obj, QEvent *event) {
                     return true; // consume
                 }
             }
-            // left click: let default selection behavior occur, but ensure widget gets focus
+            // left click: single-click selects only the clicked row (clear others) unless modifier keys are used
             if (static_cast<QMouseEvent*>(event)->button() == Qt::LeftButton) {
+                QMouseEvent *lme = static_cast<QMouseEvent*>(event);
+                QModelIndex idx = m_view->indexAt(lme->pos());
                 this->setFocus();
+                // if clicked on a valid row and no modifier keys, clear previous selection and select this row
+                if (idx.isValid()) {
+                    Qt::KeyboardModifiers mods = lme->modifiers();
+                    if (!(mods & (Qt::ControlModifier | Qt::ShiftModifier | Qt::MetaModifier))) {
+                        QItemSelectionModel *sel = m_view->selectionModel();
+                        sel->select(idx, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
+                        // do not consume the event so double-clicks are delivered to the view
+                    }
+                }
+                // otherwise fall through to default behavior (allows modifier-based multi-select)
             }
         }
 
@@ -250,9 +273,11 @@ void PaneWidget::onPathReturnPressed() {
 
 void PaneWidget::setActive(bool active) {
     if (active) {
+        // active pane: visible border and bright selected text for clarity
         m_view->setStyleSheet("QTableView { background-color: #222222; color: #00ff00; gridline-color: #222; border: 2px solid #888; } QTableView::item:selected { background-color: #000000; color: #ffffff; }");
     } else {
-        m_view->setStyleSheet("QTableView { background-color: #222222; color: #00ff00; gridline-color: #222; } QTableView::item:selected { background-color: #000000; color: #ffffff; }");
+        // inactive pane: no border and keep the original red selected text to show difference
+        m_view->setStyleSheet("QTableView { background-color: #222222; color: #00ff00; gridline-color: #222; } QTableView::item:selected { background-color: #000000; color: #ff0000; }");
     }
 }
 

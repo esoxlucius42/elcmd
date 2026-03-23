@@ -11,7 +11,8 @@ class FileModel;
 class PaneWidget : public QWidget {
     Q_OBJECT
 public:
-    explicit PaneWidget(QWidget *parent = nullptr);
+    enum RightClickMode { ContextOnSelected, SelectOnRightClick };
+    explicit PaneWidget(RightClickMode mode = SelectOnRightClick, bool useLeftStyling = true, QWidget *parent = nullptr);
     FileModel* model() const;
     void setActive(bool active);
     void focusView();
@@ -22,7 +23,6 @@ public:
     void refresh();
 
     // right-click behavior preference
-    enum RightClickMode { ContextOnSelected, SelectOnRightClick };
     void setRightClickMode(RightClickMode mode);
     RightClickMode rightClickMode() const;
 
