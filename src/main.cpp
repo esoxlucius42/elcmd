@@ -21,6 +21,7 @@
 #include <QInputDialog>
 #include <QSettings>
 #include <QCoreApplication>
+#include <QProcess>
 #include "PaneWidget.h"
 #include "FileService.h"
 #include "ConflictDialog.h"
@@ -42,17 +43,35 @@ int main(int argc, char **argv) {
     auto openExternally = [&](const QString &path, QWidget *parent) -> bool {
         if (path.isEmpty()) return false;
         QUrl url = QUrl::fromLocalFile(path);
+        // First try the Qt desktop services (uses platform default)
         if (QDesktopServices::openUrl(url)) return true;
-        QString cmd;
-    #ifdef Q_OS_WIN
-        cmd = QString("start \"\" \"%1\"").arg(path);
-    #elif defined(Q_OS_MAC)
-        cmd = QString("open \"%1\"").arg(path);
-    #else
-        cmd = QString("xdg-open \"%1\"").arg(path);
-    #endif
-        QString msg = QString("Unable to launch external application in this environment.\n\nOpen the file manually:\n%1\n\nSuggested command:\n%2").arg(path).arg(cmd);
-        Logger::instance().log("WARN", QString("Failed to open external URL: %1").arg(path));
+        // Try to spawn the file or a platform opener directly (bypass portals when possible)
+        QFileInfo fi(path);
+        QStringList tried;
+        // If the target itself is executable, try to start it directly
+        if (fi.isExecutable()) {
+            if (QProcess::startDetached(path)) return true;
+            tried << path;
+        }
+#ifdef Q_OS_WIN
+        // On Windows try 'start' via cmd
+        if (QProcess::startDetached("cmd", {"/c", "start", "", path})) return true;
+        tried << QString("cmd /c start %1").arg(path);
+#elif defined(Q_OS_MAC)
+        if (QProcess::startDetached("open", {path})) return true;
+        tried << QString("open %1").arg(path);
+#else
+        // Prefer xdg-open, then gio, then sensible-browser
+        if (QProcess::startDetached("xdg-open", {path})) return true;
+        tried << QString("xdg-open %1").arg(path);
+        if (QProcess::startDetached("gio", {"open", path})) return true;
+        tried << QString("gio open %1").arg(path);
+        if (QProcess::startDetached("xdg-open", {QUrl::fromLocalFile(path).toString()})) return true;
+        tried << QString("xdg-open %1 (url)").arg(path);
+#endif
+        // If we reach here launching failed; log and inform user with suggested commands
+        QString msg = QString("Unable to launch external application in this environment.\n\nOpen the file manually:\n%1\n\nTried commands:\n%2").arg(path).arg(tried.join("\n"));
+        Logger::instance().log("WARN", QString("Failed to open external file: %1; tried: %2").arg(path).arg(tried.join(", ")));
         QMessageBox::information(parent, "Open File", msg);
         return false;
     };
