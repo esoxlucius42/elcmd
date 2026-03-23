@@ -82,12 +82,14 @@ int main(int argc, char **argv) {
     QPushButton *bF6 = new QPushButton("F6 Move");
     QPushButton *bF7 = new QPushButton("F7 New Folder");
     QPushButton *bF8 = new QPushButton("F8 Delete");
+    QPushButton *bF12 = new QPushButton("F12 Log");
     buttonBar->addWidget(bF3);
     buttonBar->addWidget(bF4);
     buttonBar->addWidget(bF5);
     buttonBar->addWidget(bF6);
     buttonBar->addWidget(bF7);
     buttonBar->addWidget(bF8);
+    buttonBar->addWidget(bF12);
 
     mainLayout->addLayout(buttonBar);
     central->setLayout(mainLayout);
@@ -110,6 +112,7 @@ int main(int argc, char **argv) {
     bF6->setShortcut(QKeySequence(Qt::Key_F6));
     bF7->setShortcut(QKeySequence(Qt::Key_F7));
     bF8->setShortcut(QKeySequence(Qt::Key_F8));
+    bF12->setShortcut(QKeySequence(Qt::Key_F12));
 
     QObject::connect(left, &PaneWidget::selectionChanged, [&](const QString &path){
         lastSelected->setText(path);
@@ -245,6 +248,17 @@ int main(int argc, char **argv) {
             if (fi.isDir()) QDir(p).removeRecursively(); else QFile::remove(p);
         }
         active->refresh();
+    });
+
+    // F12: Open application log in default text viewer
+    QObject::connect(bF12, &QPushButton::clicked, [&]() {
+        QString path = Logger::instance().logFilePath();
+        QFileInfo lf(path);
+        if (!lf.exists()) {
+            QMessageBox::information(&win, "Log", QString("Log file not found:\n%1").arg(path));
+            return;
+        }
+        QDesktopServices::openUrl(QUrl::fromLocalFile(path));
     });
 
     // Save size on exit
