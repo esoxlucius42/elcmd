@@ -34,7 +34,7 @@ QVariant FileModel::headerData(int section, Qt::Orientation orientation, int rol
             case Name: return QStringLiteral("Filename");
             case Ext: return QStringLiteral("Ext");
             case Size: return QStringLiteral("Size");
-            case Date: return QStringLiteral("Date");
+            case Date: return QStringLiteral("Modified");
             case Attr: return QStringLiteral("ATTR");
         }
     }

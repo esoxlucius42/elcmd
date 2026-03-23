@@ -80,7 +80,8 @@ int main(int argc, char **argv) {
     central->setLayout(mainLayout);
 
     win.setCentralWidget(central);
-    win.resize(1000, 700);
+    win.setMinimumSize(1000, 800);
+    win.resize(1000, 800);
 
     // wire F5 -> copy as example
     FileService *svc = new FileService(&win);

@@ -2,6 +2,7 @@
 #include <QTableView>
 #include <QHeaderView>
 #include <QVBoxLayout>
+#include <QHBoxLayout>
 #include <QLineEdit>
 #include <QDir>
 #include <QMouseEvent>
@@ -13,6 +14,7 @@
 #include <QUrl>
 #include <QFileInfo>
 #include <QFile>
+#include <QPushButton>
 #include "FileModel.h"
 #include "ArchiveViewerDialog.h"
 
@@ -23,21 +25,54 @@ PaneWidget::PaneWidget(QWidget *parent) : QWidget(parent) {
     m_view->setSelectionBehavior(QAbstractItemView::SelectRows);
     m_view->setSelectionMode(QAbstractItemView::ExtendedSelection);
 
-    // basic appearance per spec
-    m_view->setStyleSheet("QTableView { background-color: #3a3a3a; color: #00ff00; gridline-color: #222; } QTableView::item:selected { background-color: #7f0000; color: #ffffff; }");
-    m_view->setAlternatingRowColors(true);
+    // basic appearance per request
+    // background and text
+    m_view->setStyleSheet("QTableView { background-color: #222222; color: #00ff00; } QTableView::item:selected { background-color: #000000; color: #ffffff; } QHeaderView::section { border: none; }");
+    m_view->setAlternatingRowColors(false);
+    // hide row numbers
+    m_view->verticalHeader()->hide();
+    // remove gridlines
+    m_view->setShowGrid(false);
     m_view->horizontalHeader()->setStretchLastSection(false);
     m_view->horizontalHeader()->setSectionsClickable(true);
     m_view->setSortingEnabled(true);
     m_view->setAccessibleName("File list pane");
+    // use monospaced font for headers and cells
+    QFont monoFont("Monospace");
+    monoFont.setStyleHint(QFont::TypeWriter);
+    m_view->setFont(monoFont);
+    m_view->horizontalHeader()->setFont(monoFont);
 
     m_pathEdit = new QLineEdit(this);
     m_pathEdit->setText(QDir::currentPath());
     m_pathEdit->setAccessibleName("Path editor");
 
+    // navigation buttons
+    m_parentBtn = new QPushButton("..", this);
+    m_homeBtn = new QPushButton("~", this);
+    m_rootBtn = new QPushButton("/", this);
+    m_parentBtn->setToolTip("Parent folder");
+    m_homeBtn->setToolTip("Home folder");
+    m_rootBtn->setToolTip("Root folder");
+    // size buttons to minimal width for two characters
+    {
+        QFontMetrics fm(m_parentBtn->font());
+        int btnWidth = fm.horizontalAdvance("..") + 16; // small padding
+        m_parentBtn->setFixedWidth(btnWidth);
+        m_homeBtn->setFixedWidth(btnWidth);
+        m_rootBtn->setFixedWidth(btnWidth);
+    }
+
+    QHBoxLayout *top = new QHBoxLayout();
+    top->setContentsMargins(0,0,0,0);
+    top->addWidget(m_pathEdit);
+    top->addWidget(m_parentBtn);
+    top->addWidget(m_homeBtn);
+    top->addWidget(m_rootBtn);
+
     QVBoxLayout *l = new QVBoxLayout(this);
     l->setContentsMargins(2,2,2,2);
-    l->addWidget(m_pathEdit);
+    l->addLayout(top);
     l->addWidget(m_view);
 
     // install event filter on viewport to customize right-click selection
@@ -56,9 +91,37 @@ PaneWidget::PaneWidget(QWidget *parent) : QWidget(parent) {
         }
     });
 
+    // navigation handlers
+    connect(m_parentBtn, &QPushButton::clicked, this, &PaneWidget::onParentClicked);
+    connect(m_homeBtn, &QPushButton::clicked, this, &PaneWidget::onHomeClicked);
+    connect(m_rootBtn, &QPushButton::clicked, this, &PaneWidget::onRootClicked);
+    connect(m_pathEdit, &QLineEdit::returnPressed, this, &PaneWidget::onPathReturnPressed);
+
     // default path is current working directory
     m_model->setPath(QDir::currentPath());
+
+    // column sizing: compute attr width for 5 chars in monospaced font
+    QFontMetrics fm(m_view->font());
+    int attrWidth = fm.horizontalAdvance("xxxxx") + 8; // five chars + padding
+
+    // find column indices from FileModel enum via header labels
+    // assume columns: Name(0), Ext(1), Size(2), Date(3), Attr(4)
+    const int nameIdx = 0;
+    const int extIdx = 1;
+    const int sizeIdx = 2;
+    const int dateIdx = 3;
+    const int attrIdx = 4;
+
+    m_view->horizontalHeader()->setSectionResizeMode(attrIdx, QHeaderView::Fixed);
+    m_view->setColumnWidth(attrIdx, attrWidth);
+
+    m_view->horizontalHeader()->setSectionResizeMode(dateIdx, QHeaderView::ResizeToContents);
+    m_view->horizontalHeader()->setSectionResizeMode(nameIdx, QHeaderView::Stretch);
+    // keep ext and size reasonable
+    m_view->horizontalHeader()->setSectionResizeMode(extIdx, QHeaderView::ResizeToContents);
+    m_view->horizontalHeader()->setSectionResizeMode(sizeIdx, QHeaderView::ResizeToContents);
 }
+
 
 FileModel* PaneWidget::model() const { return m_model; }
 
@@ -144,11 +207,48 @@ void PaneWidget::onSelectionChanged() {
     }
 }
 
+void PaneWidget::onParentClicked() {
+    QDir d(m_pathEdit->text());
+    if (!d.exists()) return;
+    d.cdUp();
+    QString p = d.absolutePath();
+    m_pathEdit->setText(p);
+    m_model->setPath(p);
+}
+
+void PaneWidget::onHomeClicked() {
+    QString p = QDir::homePath();
+    m_pathEdit->setText(p);
+    m_model->setPath(p);
+}
+
+void PaneWidget::onRootClicked() {
+    QString p = QDir::rootPath();
+    m_pathEdit->setText(p);
+    m_model->setPath(p);
+}
+
+void PaneWidget::onPathReturnPressed() {
+    QString path = m_pathEdit->text();
+    // expand ~ at start
+    if (path.startsWith("~")) {
+        path.replace(0, 1, QDir::homePath());
+    }
+    QString cleaned = QDir::cleanPath(path);
+    QFileInfo fi(cleaned);
+    if (fi.exists() && fi.isDir()) {
+        m_pathEdit->setText(fi.absoluteFilePath());
+        m_model->setPath(fi.absoluteFilePath());
+    } else {
+        QMessageBox::warning(this, "Path not found", QString("Path does not exist or is not a folder:\n%1").arg(path));
+    }
+}
+
 void PaneWidget::setActive(bool active) {
     if (active) {
-        m_view->setStyleSheet("QTableView { background-color: #3a3a3a; color: #00ff00; gridline-color: #222; border: 2px solid #888; } QTableView::item:selected { background-color: #7f0000; color: #ffffff; }");
+        m_view->setStyleSheet("QTableView { background-color: #222222; color: #00ff00; gridline-color: #222; border: 2px solid #888; } QTableView::item:selected { background-color: #000000; color: #ffffff; }");
     } else {
-        m_view->setStyleSheet("QTableView { background-color: #3a3a3a; color: #00ff00; gridline-color: #222; } QTableView::item:selected { background-color: #7f0000; color: #ffffff; }");
+        m_view->setStyleSheet("QTableView { background-color: #222222; color: #00ff00; gridline-color: #222; } QTableView::item:selected { background-color: #000000; color: #ffffff; }");
     }
 }
 

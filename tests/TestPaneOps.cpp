@@ -2,7 +2,10 @@
 #include <QTemporaryDir>
 #include <QFile>
 #include <QDir>
+#include <QLineEdit>
+#include <QMetaObject>
 #include "FileService.h"
+#include "PaneWidget.h"
 
 class TestPaneOps : public QObject {
     Q_OBJECT
@@ -43,6 +46,58 @@ private slots:
         // test delete
         QVERIFY(QFile::remove(moved));
         QCOMPARE(QFile::exists(moved), false);
+    }
+
+    void test_navigation_buttons_and_enter() {
+        QTemporaryDir tmp;
+        QVERIFY(tmp.isValid());
+
+        PaneWidget pw;
+        QLineEdit *le = pw.findChild<QLineEdit*>();
+        QVERIFY(le);
+
+        // start in temp root by entering path and pressing Enter
+        QString base = tmp.path();
+        le->setText(base);
+        bool invoked = QMetaObject::invokeMethod(&pw, "onPathReturnPressed", Qt::DirectConnection);
+        QVERIFY(invoked);
+        QCOMPARE(pw.currentPath(), base);
+
+        // create subdir and navigate into it
+        QString sub = base + "/subdir";
+        QDir().mkpath(sub);
+        le->setText(sub);
+        invoked = QMetaObject::invokeMethod(&pw, "onPathReturnPressed", Qt::DirectConnection);
+        QVERIFY(invoked);
+        QCOMPARE(pw.currentPath(), sub);
+
+        // invoke parent button
+        invoked = QMetaObject::invokeMethod(&pw, "onParentClicked", Qt::DirectConnection);
+        QVERIFY(invoked);
+        QCOMPARE(pw.currentPath(), base);
+
+        // invoke home button
+        invoked = QMetaObject::invokeMethod(&pw, "onHomeClicked", Qt::DirectConnection);
+        QVERIFY(invoked);
+        QCOMPARE(pw.currentPath(), QDir::homePath());
+
+        // invoke root button
+        invoked = QMetaObject::invokeMethod(&pw, "onRootClicked", Qt::DirectConnection);
+        QVERIFY(invoked);
+        QCOMPARE(pw.currentPath(), QDir::rootPath());
+
+        // test Enter navigation with valid and invalid paths
+        le->setText(base);
+        invoked = QMetaObject::invokeMethod(&pw, "onPathReturnPressed", Qt::DirectConnection);
+        QVERIFY(invoked);
+        QCOMPARE(pw.currentPath(), base);
+
+        QString invalid = base + "/path_that_does_not_exist_123";
+        le->setText(invalid);
+        invoked = QMetaObject::invokeMethod(&pw, "onPathReturnPressed", Qt::DirectConnection);
+        QVERIFY(invoked);
+        // current path should remain unchanged
+        QCOMPARE(pw.currentPath(), base);
     }
 };
 

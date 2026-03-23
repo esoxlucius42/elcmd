@@ -3,6 +3,9 @@ Prototype Qt application (Total Commander clone) - skeleton
 This repository contains a minimal Qt/C++ prototype for the two-pane file manager used during Sprint 1.
 
 Build (example):
+- cmake --build build --target elcmd -- -j4
+
+OLD
 - mkdir build && cd build
 - cmake ..
 - cmake --build .

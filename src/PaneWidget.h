@@ -4,6 +4,7 @@
 class QTableView;
 class QLineEdit;
 class QLabel;
+class QPushButton;
 class FileModel;
 
 class PaneWidget : public QWidget {
@@ -32,10 +33,17 @@ protected:
 
 private slots:
     void onSelectionChanged();
+    void onParentClicked();
+    void onHomeClicked();
+    void onRootClicked();
+    void onPathReturnPressed();
 
 private:
     QLineEdit *m_pathEdit;
     QTableView *m_view;
     FileModel *m_model;
+    QPushButton *m_parentBtn;
+    QPushButton *m_homeBtn;
+    QPushButton *m_rootBtn;
     RightClickMode m_rightClickMode = SelectOnRightClick; // default per spec
 };

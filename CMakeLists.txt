@@ -47,8 +47,8 @@ add_executable(test_fileservice tests/TestFileService.cpp)
 target_link_libraries(test_fileservice PRIVATE Qt6::Test core)
 add_test(NAME fileservice_test COMMAND test_fileservice)
 
-add_executable(test_paneops tests/TestPaneOps.cpp)
-target_link_libraries(test_paneops PRIVATE Qt6::Test core)
+add_executable(test_paneops tests/TestPaneOps.cpp src/PaneWidget.cpp src/ArchiveViewerDialog.cpp src/ConflictDialog.cpp)
+target_link_libraries(test_paneops PRIVATE Qt6::Test Qt6::Widgets core)
 add_test(NAME paneops_test COMMAND test_paneops)
 
 add_executable(test_rightclick tests/TestRightClick.cpp src/PaneWidget.cpp src/ArchiveViewerDialog.cpp src/ConflictDialog.cpp)
