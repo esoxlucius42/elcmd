@@ -36,6 +36,27 @@ int main(int argc, char **argv) {
 
     QMainWindow win;
     QWidget *central = new QWidget();
+
+    // Helper to open files/paths in external apps. If launching is not allowed in
+    // this environment, show the path and a suggested command and log the event.
+    auto openExternally = [&](const QString &path, QWidget *parent) -> bool {
+        if (path.isEmpty()) return false;
+        QUrl url = QUrl::fromLocalFile(path);
+        if (QDesktopServices::openUrl(url)) return true;
+        QString cmd;
+    #ifdef Q_OS_WIN
+        cmd = QString("start \"\" \"%1\"").arg(path);
+    #elif defined(Q_OS_MAC)
+        cmd = QString("open \"%1\"").arg(path);
+    #else
+        cmd = QString("xdg-open \"%1\"").arg(path);
+    #endif
+        QString msg = QString("Unable to launch external application in this environment.\n\nOpen the file manually:\n%1\n\nSuggested command:\n%2").arg(path).arg(cmd);
+        Logger::instance().log("WARN", QString("Failed to open external URL: %1").arg(path));
+        QMessageBox::information(parent, "Open File", msg);
+        return false;
+    };
+
     QHBoxLayout *layout = new QHBoxLayout();
 
     PaneWidget *left = new PaneWidget(PaneWidget::SelectOnRightClick, true);
@@ -132,7 +153,7 @@ int main(int argc, char **argv) {
         if (!f.exists()) { QMessageBox::warning(nullptr, "View", "File does not exist"); return; }
         if (f.size() > 5*1024*1024) { // too big for internal viewer
             if (QMessageBox::question(nullptr, "View", "File is large. Open in external viewer?") == QMessageBox::Yes)
-                QDesktopServices::openUrl(QUrl::fromLocalFile(lastPath));
+                openExternally(lastPath, &win);
             return;
         }
         if (!f.open(QIODevice::ReadOnly)) { QMessageBox::warning(nullptr, "View", "Failed to open file"); return; }
@@ -152,8 +173,8 @@ int main(int argc, char **argv) {
     // F4: open with default editor/application
     QObject::connect(bF4, &QPushButton::clicked, [&]() {
         if (lastPath.isEmpty()) { QMessageBox::information(nullptr, "Edit", "No file selected"); return; }
-        if (!QDesktopServices::openUrl(QUrl::fromLocalFile(lastPath))) {
-            QMessageBox::warning(nullptr, "Edit", "Failed to launch external editor");
+        if (!openExternally(lastPath, &win)) {
+            // User has been informed by openExternally; no further action required
         }
     });
 
@@ -258,7 +279,7 @@ int main(int argc, char **argv) {
             QMessageBox::information(&win, "Log", QString("Log file not found:\n%1").arg(path));
             return;
         }
-        QDesktopServices::openUrl(QUrl::fromLocalFile(path));
+        openExternally(path, &win);
     });
 
     // Save size on exit
