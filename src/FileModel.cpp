@@ -5,6 +5,36 @@
 #include <QFileInfo>
 #include <algorithm>
 
+// Helper: format sizes into a fixed-width 8-character right-aligned string.
+// Binary units (KiB = 1024) are used: B, KiB, MiB, GiB, TiB.
+static QString formatSize(qint64 size) {
+    const char *units[] = {"B", "KiB", "MiB", "GiB", "TiB"};
+    // Bytes: show integer, and add an extra space before 'B' so numbers align with decimal formats.
+    if (size < 1024) {
+        QString num = QString::number(size);
+        QString s = num + "  " + QString::fromLatin1(units[0]); // two spaces before 'B'
+        if (s.length() > 8) return QString("########");
+        return s.rightJustified(8, ' ');
+    }
+
+    double v = static_cast<double>(size);
+    int unit = 0;
+    while (v >= 1024.0 && unit < 4) {
+        v /= 1024.0;
+        ++unit;
+    }
+    // Format with one decimal place
+    QString num = QString::number(v, 'f', 1);
+    QString s = num + ' ' + QString::fromLatin1(units[unit]);
+    // If too long, try without decimals (integer)
+    if (s.length() > 8) {
+        QString num2 = QString::number(static_cast<long long>(std::llround(v)));
+        s = num2 + ' ' + QString::fromLatin1(units[unit]);
+        if (s.length() > 8) return QString("########");
+    }
+    return s.rightJustified(8, ' ');
+}
+
 FileModel::FileModel(QObject *parent) : QAbstractTableModel(parent) {
 }
 
@@ -20,7 +50,7 @@ QVariant FileModel::data(const QModelIndex &index, int role) const {
         switch (index.column()) {
             case Name: return e.name;
             case Ext: return e.ext;
-            case Size: return e.is_dir ? QStringLiteral("<DIR>") : QString::number(e.size);
+            case Size: return e.is_dir ? QStringLiteral("<DIR>") : formatSize(e.size);
             case Date: return e.mtime.toString(Qt::ISODate);
             case Attr: return e.attr;
         }
