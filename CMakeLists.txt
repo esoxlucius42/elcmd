@@ -14,6 +14,7 @@ add_library(core STATIC
     src/FileModel.cpp
     src/FileService.cpp
     src/ArchiveService.cpp
+    src/Logger.cpp
 )
 
 add_executable(elcmd
