@@ -1,8 +1,7 @@
 #include "FileModel.h"
-
-#include "FileModel.h"
 #include <QDir>
 #include <QFileInfo>
+#include <QColor>
 #include <algorithm>
 
 // Helper: format sizes into a fixed-width 8-character right-aligned string.
@@ -54,6 +53,9 @@ QVariant FileModel::data(const QModelIndex &index, int role) const {
             case Date: return e.mtime.toString(Qt::ISODate);
             case Attr: return e.attr;
         }
+    } else if (role == Qt::ForegroundRole) {
+        // Force bright green text for file entries so they remain visible on dark backgrounds
+        return QColor(0, 255, 0);
     }
     return {};
 }

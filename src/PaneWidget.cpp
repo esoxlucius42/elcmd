@@ -18,6 +18,34 @@
 #include "FileModel.h"
 #include "ArchiveViewerDialog.h"
 #include <QTimer>
+#include <QColor>
+#include <QStyledItemDelegate>
+#include <QPainter>
+#include <QApplication>
+
+// Delegate that forces bright-green text regardless of style/palette
+class BrightTextDelegate : public QStyledItemDelegate {
+public:
+    BrightTextDelegate(QObject *parent=nullptr) : QStyledItemDelegate(parent) {}
+
+    void paint(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index) const override {
+        QStyleOptionViewItem opt = option;
+        initStyleOption(&opt, index);
+        QString txt = opt.text;
+        opt.text.clear();
+        // draw background / selection using base implementation (without text)
+        QStyledItemDelegate::paint(painter, opt, index);
+
+        painter->save();
+        QColor brightGreen(0,255,0);
+        painter->setPen(brightGreen);
+        QFontMetrics fm(opt.font);
+        QString elided = fm.elidedText(txt, Qt::ElideRight, opt.rect.width() - 8);
+        QRect r = opt.rect.adjusted(4, 0, -4, 0);
+        painter->drawText(r, Qt::AlignVCenter | Qt::AlignLeft, elided);
+        painter->restore();
+    }
+};
 
 PaneWidget::PaneWidget(RightClickMode mode, bool useLeftStyling, QWidget *parent) : QWidget(parent), m_rightClickMode(mode) {
     m_model = new FileModel(this);
@@ -31,9 +59,15 @@ PaneWidget::PaneWidget(RightClickMode mode, bool useLeftStyling, QWidget *parent
     m_view->setSelectionBehavior(QAbstractItemView::SelectRows);
     m_view->setSelectionMode(QAbstractItemView::ExtendedSelection);
 
-    // basic appearance: use default QTableView visuals. Remove custom stylesheet to restore platform-default selection visuals.
+    // basic appearance: use default QTableView visuals. Force bright green text so items are visible on dark backgrounds.
     m_view->setStyleSheet("");
-    m_view->setAlternatingRowColors(true);
+    QPalette pal = m_view->palette();
+    QColor brightGreen(0x00, 0xFF, 0x00);
+    pal.setColor(QPalette::Text, brightGreen);
+    pal.setColor(QPalette::WindowText, brightGreen);
+    pal.setColor(QPalette::HighlightedText, brightGreen);
+    m_view->setPalette(pal);
+    m_view->setAlternatingRowColors(false);
     // hide row numbers
     m_view->verticalHeader()->hide();
     // remove gridlines
@@ -48,8 +82,8 @@ PaneWidget::PaneWidget(RightClickMode mode, bool useLeftStyling, QWidget *parent
     m_view->setFont(monoFont);
     m_view->horizontalHeader()->setFont(monoFont);
 
-    // use default delegate (no custom painting)
-    m_view->setItemDelegate(nullptr);
+    // use custom delegate to force bright green text
+    m_view->setItemDelegate(new BrightTextDelegate(m_view));
 
     m_pathEdit = new QLineEdit(this);
     m_pathEdit->setText(QDir::currentPath());
