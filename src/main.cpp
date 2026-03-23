@@ -91,7 +91,6 @@ int main(int argc, char **argv) {
 
     // restore saved size (fallback to 1000x800)
     QSize savedSize = settings.value("mainWindow/size", QSize(1000, 800)).toSize();
-    bool wasMax = settings.value("mainWindow/maximized", false).toBool();
 
     win.setMinimumSize(1000, 800);
     win.resize(savedSize);
@@ -237,16 +236,14 @@ int main(int argc, char **argv) {
         active->refresh();
     });
 
-    // Save size and maximized state on exit
+    // Save size on exit
     QObject::connect(&app, &QApplication::aboutToQuit, [&]() {
         QSize toSave = win.isMaximized() ? win.normalGeometry().size() : win.size();
         settings.setValue("mainWindow/size", toSave);
-        settings.setValue("mainWindow/maximized", win.isMaximized());
     });
 
-    // Show window (restore maximized state if needed)
-    if (wasMax) win.showMaximized();
-    else win.show();
+    // Show window
+    win.show();
 
     return app.exec();
 }
