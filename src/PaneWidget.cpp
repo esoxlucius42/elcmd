@@ -17,10 +17,16 @@
 #include <QPushButton>
 #include "FileModel.h"
 #include "ArchiveViewerDialog.h"
+#include <QTimer>
 
 PaneWidget::PaneWidget(RightClickMode mode, bool useLeftStyling, QWidget *parent) : QWidget(parent), m_rightClickMode(mode) {
     m_model = new FileModel(this);
+    // populate model before creating the view to avoid view reacting to model resets during show
+    m_model->setPath(QDir::currentPath());
+
     m_view = new QTableView(this);
+    // avoid header auto-resize during early initialization that may query model size hints
+    m_view->horizontalHeader()->setSectionResizeMode(QHeaderView::Interactive);
     m_view->setModel(m_model);
     m_view->setSelectionBehavior(QAbstractItemView::SelectRows);
     m_view->setSelectionMode(QAbstractItemView::ExtendedSelection);
@@ -110,8 +116,6 @@ PaneWidget::PaneWidget(RightClickMode mode, bool useLeftStyling, QWidget *parent
     connect(m_rootBtn, &QPushButton::clicked, this, &PaneWidget::onRootClicked);
     connect(m_pathEdit, &QLineEdit::returnPressed, this, &PaneWidget::onPathReturnPressed);
 
-    // default path is current working directory
-    m_model->setPath(QDir::currentPath());
 
     // column sizing: compute attr width for 5 chars in monospaced font
     QFontMetrics fm(m_view->font());
@@ -128,11 +132,15 @@ PaneWidget::PaneWidget(RightClickMode mode, bool useLeftStyling, QWidget *parent
     m_view->horizontalHeader()->setSectionResizeMode(attrIdx, QHeaderView::Fixed);
     m_view->setColumnWidth(attrIdx, attrWidth);
 
-    m_view->horizontalHeader()->setSectionResizeMode(dateIdx, QHeaderView::ResizeToContents);
+    // avoid ResizeToContents which queries model size hints during initialization and can trigger crashes in some Qt versions
+    m_view->horizontalHeader()->setSectionResizeMode(dateIdx, QHeaderView::Interactive);
     m_view->horizontalHeader()->setSectionResizeMode(nameIdx, QHeaderView::Stretch);
-    // keep ext and size reasonable
-    m_view->horizontalHeader()->setSectionResizeMode(extIdx, QHeaderView::ResizeToContents);
-    m_view->horizontalHeader()->setSectionResizeMode(sizeIdx, QHeaderView::ResizeToContents);
+    // keep ext and size reasonable (interactive widths)
+    m_view->horizontalHeader()->setSectionResizeMode(extIdx, QHeaderView::Interactive);
+    m_view->horizontalHeader()->setSectionResizeMode(sizeIdx, QHeaderView::Interactive);
+    // set a sensible default width for small columns
+    m_view->setColumnWidth(extIdx, fm.horizontalAdvance("ext") * 3);
+    m_view->setColumnWidth(sizeIdx, fm.horizontalAdvance("1,234 KiB") + 12);
 }
 
 
@@ -275,13 +283,10 @@ void PaneWidget::onPathReturnPressed() {
 }
 
 void PaneWidget::setActive(bool active) {
-    if (active) {
-        // active pane: visible border only; delegate controls text colors
-        m_view->setStyleSheet("QTableView { background-color: #222222; color: #00ff00; gridline-color: #222; border: 2px solid #888; }");
-    } else {
-        // inactive pane: no border; delegate controls text colors
-        m_view->setStyleSheet("QTableView { background-color: #222222; color: #00ff00; gridline-color: #222; }");
-    }
+    // Avoid changing style sheets during initialization — set a property and update later when widget is shown
+    if (active) this->setProperty("paneActive", true);
+    else this->setProperty("paneActive", false);
+
 }
 
 void PaneWidget::focusView() {
