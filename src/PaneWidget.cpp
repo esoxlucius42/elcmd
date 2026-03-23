@@ -22,16 +22,14 @@
 #include <QPalette>
 #include <QColor>
 
-// Delegate to paint the highlighted row (black background) and apply text colors for selected/unselected rows
+// Delegate to paint row text colors and normalize background
 class HighlightDelegate : public QStyledItemDelegate {
 public:
-    explicit HighlightDelegate(class PaneWidget *owner) : QStyledItemDelegate(owner), m_owner(owner) {}
+    explicit HighlightDelegate(QObject *parent = nullptr) : QStyledItemDelegate(parent) {}
     void paint(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index) const override;
-private:
-    PaneWidget *m_owner;
 };
 
-PaneWidget::PaneWidget(RightClickMode mode, bool useLeftStyling, QWidget *parent) : QWidget(parent), m_rightClickMode(mode), m_highlightedRow(-1) {
+PaneWidget::PaneWidget(RightClickMode mode, bool useLeftStyling, QWidget *parent) : QWidget(parent), m_rightClickMode(mode) {
     m_model = new FileModel(this);
     m_view = new QTableView(this);
     m_view->setModel(m_model);
@@ -101,8 +99,6 @@ PaneWidget::PaneWidget(RightClickMode mode, bool useLeftStyling, QWidget *parent
         QString full = QDir(m_pathEdit->text()).filePath(name);
         QFileInfo fi(full);
         if (!fi.exists()) return;
-        // set highlighted row to the double-clicked row
-        setHighlightedRow(idx.row());
         if (fi.isDir()) {
             // navigate into directory
             m_pathEdit->setText(fi.absoluteFilePath());
@@ -160,13 +156,6 @@ PaneWidget::RightClickMode PaneWidget::rightClickMode() const { return m_rightCl
 
 QString PaneWidget::currentPath() const { return m_pathEdit->text(); }
 
-void PaneWidget::setHighlightedRow(int row) {
-    if (row == m_highlightedRow) return;
-    m_highlightedRow = row;
-    if (m_view) m_view->viewport()->update();
-}
-
-int PaneWidget::highlightedRow() const { return m_highlightedRow; }
 
 QStringList PaneWidget::selectedPaths() const {
     QStringList out;
@@ -200,8 +189,6 @@ bool PaneWidget::eventFilter(QObject *obj, QEvent *event) {
                     if (m_rightDragWillSelect) sel->select(idx, QItemSelectionModel::Select | QItemSelectionModel::Rows);
                     else sel->select(idx, QItemSelectionModel::Deselect | QItemSelectionModel::Rows);
                     m_rightDragHandledRows.insert(idx.row());
-                    // update highlighted row to the one user interacted with
-                    setHighlightedRow(idx.row());
                     return true; // consume
                 }
             }
@@ -216,8 +203,6 @@ bool PaneWidget::eventFilter(QObject *obj, QEvent *event) {
                     if (!(mods & (Qt::ControlModifier | Qt::ShiftModifier | Qt::MetaModifier))) {
                         QItemSelectionModel *sel = m_view->selectionModel();
                         sel->select(idx, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
-                        // update highlighted row for the last-interacted item
-                        setHighlightedRow(idx.row());
                         // do not consume the event so double-clicks are delivered to the view
                     }
                 }
@@ -315,28 +300,13 @@ void PaneWidget::focusView() {
     m_view->setFocus();
 }
 
-// HighlightDelegate implementation
+// HighlightDelegate implementation (no per-row highlight)
 void HighlightDelegate::paint(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index) const {
     QStyleOptionViewItem opt(option);
-    // if this row is the highlighted row, paint black background
-    if (m_owner && index.row() == m_owner->highlightedRow()) {
-        painter->save();
-        painter->fillRect(opt.rect, Qt::black);
-        // text color depends on selection state: selected -> red, otherwise -> green
-        if (opt.state & QStyle::State_Selected) opt.palette.setColor(QPalette::Text, QColor("#ff0000"));
-        else opt.palette.setColor(QPalette::Text, QColor("#00ff00"));
-        QStyledItemDelegate::paint(painter, opt, index);
-        painter->restore();
-        return;
-    }
-    // For non-highlighted rows, prevent the style engine from drawing a distinct selection background
-    // by forcing the background to the normal pane background color.
+    // Force normal pane background for all rows
     opt.backgroundBrush = QBrush(QColor("#222222"));
-    // then set text color by selection state
-    if (opt.state & QStyle::State_Selected) {
-        opt.palette.setColor(QPalette::Text, QColor("#ff0000"));
-    } else {
-        opt.palette.setColor(QPalette::Text, QColor("#00ff00"));
-    }
+    // Set text color: selected -> red; unselected -> green
+    if (opt.state & QStyle::State_Selected) opt.palette.setColor(QPalette::Text, QColor("#ff0000"));
+    else opt.palette.setColor(QPalette::Text, QColor("#00ff00"));
     QStyledItemDelegate::paint(painter, opt, index);
 }

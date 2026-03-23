@@ -17,9 +17,6 @@ public:
     void setActive(bool active);
     void focusView();
 
-    // highlight API: view-only single-row highlight (last-interacted item)
-    void setHighlightedRow(int row);
-    int highlightedRow() const;
 
     // helper accessors for main app
     QString currentPath() const;
@@ -52,8 +49,6 @@ private:
     QPushButton *m_rootBtn;
     RightClickMode m_rightClickMode = SelectOnRightClick; // default per spec
 
-    // highlighted row (view-only): index of last-interacted row, -1 none
-    int m_highlightedRow = -1;
 
     // right-click drag/toggle state
     bool m_rightDragActive{false};
