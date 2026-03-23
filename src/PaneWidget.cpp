@@ -17,17 +17,6 @@
 #include <QPushButton>
 #include "FileModel.h"
 #include "ArchiveViewerDialog.h"
-#include <QStyledItemDelegate>
-#include <QPainter>
-#include <QPalette>
-#include <QColor>
-
-// Delegate to paint row text colors and normalize background
-class HighlightDelegate : public QStyledItemDelegate {
-public:
-    explicit HighlightDelegate(QObject *parent = nullptr) : QStyledItemDelegate(parent) {}
-    void paint(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index) const override;
-};
 
 PaneWidget::PaneWidget(RightClickMode mode, bool useLeftStyling, QWidget *parent) : QWidget(parent), m_rightClickMode(mode) {
     m_model = new FileModel(this);
@@ -36,10 +25,9 @@ PaneWidget::PaneWidget(RightClickMode mode, bool useLeftStyling, QWidget *parent
     m_view->setSelectionBehavior(QAbstractItemView::SelectRows);
     m_view->setSelectionMode(QAbstractItemView::ExtendedSelection);
 
-    // basic appearance per request
-    // background and text: unselected text bright green; selected text will be painted red by delegate
-    m_view->setStyleSheet("QTableView { background-color: #222222; color: #00ff00; } QHeaderView::section { border: none; }");
-    m_view->setAlternatingRowColors(false);
+    // basic appearance: use default QTableView visuals. Remove custom stylesheet to restore platform-default selection visuals.
+    m_view->setStyleSheet("");
+    m_view->setAlternatingRowColors(true);
     // hide row numbers
     m_view->verticalHeader()->hide();
     // remove gridlines
@@ -54,8 +42,8 @@ PaneWidget::PaneWidget(RightClickMode mode, bool useLeftStyling, QWidget *parent
     m_view->setFont(monoFont);
     m_view->horizontalHeader()->setFont(monoFont);
 
-    // install highlight delegate
-    m_view->setItemDelegate(new HighlightDelegate(this));
+    // use default delegate (no custom painting)
+    m_view->setItemDelegate(nullptr);
 
     m_pathEdit = new QLineEdit(this);
     m_pathEdit->setText(QDir::currentPath());
@@ -300,13 +288,4 @@ void PaneWidget::focusView() {
     m_view->setFocus();
 }
 
-// HighlightDelegate implementation (no per-row highlight)
-void HighlightDelegate::paint(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index) const {
-    QStyleOptionViewItem opt(option);
-    // Force normal pane background for all rows
-    opt.backgroundBrush = QBrush(QColor("#222222"));
-    // Set text color: selected -> red; unselected -> green
-    if (opt.state & QStyle::State_Selected) opt.palette.setColor(QPalette::Text, QColor("#ff0000"));
-    else opt.palette.setColor(QPalette::Text, QColor("#00ff00"));
-    QStyledItemDelegate::paint(painter, opt, index);
-}
+
