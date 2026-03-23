@@ -22,6 +22,11 @@
 #include <QSettings>
 #include <QCoreApplication>
 #include <QProcess>
+#include <QMenuBar>
+#include <QMenu>
+#include <QAction>
+#include <QClipboard>
+#include <QGuiApplication>
 #include "PaneWidget.h"
 #include "FileService.h"
 #include "ConflictDialog.h"
@@ -38,39 +43,109 @@ int main(int argc, char **argv) {
     QMainWindow win;
     QWidget *central = new QWidget();
 
+    // Helper to detect common sandbox / portal environments and return a short message.
+    auto detectSandbox = [&]() -> QString {
+        QStringList reasons;
+        const QByteArray flatpak = QByteArray::fromRawData(qgetenv("FLATPAK_ID"), qstrlen(qgetenv("FLATPAK_ID")));
+        const QByteArray snap = QByteArray::fromRawData(qgetenv("SNAP"), qstrlen(qgetenv("SNAP")));
+        const QByteArray portal = QByteArray::fromRawData(qgetenv("XDG_DESKTOP_PORTAL"), qstrlen(qgetenv("XDG_DESKTOP_PORTAL")));
+        const QByteArray portalPid = QByteArray::fromRawData(qgetenv("XDG_DESKTOP_PORTAL_PID"), qstrlen(qgetenv("XDG_DESKTOP_PORTAL_PID")));
+        if (!flatpak.isEmpty()) reasons << QString("Flatpak (FLATPAK_ID=%1)").arg(QString::fromUtf8(flatpak));
+        if (!snap.isEmpty()) reasons << QString("Snap (SNAP=%1)").arg(QString::fromUtf8(snap));
+        if (!portal.isEmpty() || !portalPid.isEmpty()) reasons << QString("Desktop portal detected");
+        // Check for presence of /.flatpak-info as another hint
+        if (QFile::exists("/.flatpak-info") || QFile::exists("/run/.flatpak-info")) reasons << "Flatpak runtime detected";
+        return reasons.isEmpty() ? QString() : reasons.join("; ");
+    };
+
     // Helper to open files/paths in external apps. If launching is not allowed in
-    // this environment, show the path and a suggested command and log the event.
+    // this environment, attempt several fallbacks, capture diagnostic output and
+    // present helpful guidance (and copy suggested command to clipboard).
     auto openExternally = [&](const QString &path, QWidget *parent) -> bool {
         if (path.isEmpty()) return false;
         QUrl url = QUrl::fromLocalFile(path);
-        // First try the Qt desktop services (uses platform default)
-        if (QDesktopServices::openUrl(url)) return true;
-        // Try to spawn the file or a platform opener directly (bypass portals when possible)
+        QSettings localSettings;
+        bool preferDetached = localSettings.value("external/preferStartDetached", false).toBool();
+
+        // 1) Qt's desktop services
+        if (!preferDetached && QDesktopServices::openUrl(url)) return true;
+
         QFileInfo fi(path);
         QStringList tried;
-        // If the target itself is executable, try to start it directly
+        struct TriedResult { QString cmd; QString out; QString err; int exitCode = -1; bool ok = false; };
+        QVector<TriedResult> results;
+
+        // Helper to run a command synchronously to capture stderr/stdout for diagnostics
+        auto tryCommand = [&](const QString &program, const QStringList &args)->TriedResult{
+            TriedResult r;
+            r.cmd = program + " " + args.join(' ');
+            QProcess p;
+            p.start(program, args);
+            if (!p.waitForStarted(2000)) {
+                r.ok = false; r.err = "failed to start"; return r;
+            }
+            p.waitForFinished(3000);
+            r.exitCode = p.exitCode();
+            r.out = QString::fromLocal8Bit(p.readAllStandardOutput()).trimmed();
+            r.err = QString::fromLocal8Bit(p.readAllStandardError()).trimmed();
+            r.ok = (r.exitCode == 0);
+            return r;
+        };
+
+        // If target itself is executable, try to run it directly (detached or sync)
         if (fi.isExecutable()) {
-            if (QProcess::startDetached(path)) return true;
-            tried << path;
+            if (preferDetached) {
+                if (QProcess::startDetached(path)) return true;
+                // fallthrough to try a synchronous attempt for diagnostics
+            }
+            auto r = tryCommand(path, {});
+            results.append(r);
+            tried << r.cmd;
+            if (r.ok) return true;
         }
+
 #ifdef Q_OS_WIN
-        // On Windows try 'start' via cmd
-        if (QProcess::startDetached("cmd", {"/c", "start", "", path})) return true;
-        tried << QString("cmd /c start %1").arg(path);
+        if (preferDetached) {
+            if (QProcess::startDetached("cmd", {"/c", "start", "", path})) return true;
+        }
+        results.append( tryCommand("cmd", {"/c","start","",path}) ); tried << "cmd /c start " + path;
 #elif defined(Q_OS_MAC)
-        if (QProcess::startDetached("open", {path})) return true;
-        tried << QString("open %1").arg(path);
+        if (preferDetached) {
+            if (QProcess::startDetached("open", {path})) return true;
+        }
+        results.append( tryCommand("open", {path}) ); tried << "open " + path;
 #else
-        // Prefer xdg-open, then gio, then sensible-browser
-        if (QProcess::startDetached("xdg-open", {path})) return true;
-        tried << QString("xdg-open %1").arg(path);
-        if (QProcess::startDetached("gio", {"open", path})) return true;
-        tried << QString("gio open %1").arg(path);
-        if (QProcess::startDetached("xdg-open", {QUrl::fromLocalFile(path).toString()})) return true;
-        tried << QString("xdg-open %1 (url)").arg(path);
+        // prefer detached if requested
+        if (preferDetached) {
+            if (QProcess::startDetached("xdg-open", {path})) return true;
+            if (QProcess::startDetached("gio", {"open", path})) return true;
+        }
+        results.append( tryCommand("xdg-open", {path}) ); tried << "xdg-open " + path;
+        results.append( tryCommand("gio", {"open", path}) ); tried << "gio open " + path;
+        // try passing a file:// URL
+        results.append( tryCommand("xdg-open", {QUrl::fromLocalFile(path).toString()}) ); tried << "xdg-open " + QUrl::fromLocalFile(path).toString();
 #endif
-        // If we reach here launching failed; log and inform user with suggested commands
-        QString msg = QString("Unable to launch external application in this environment.\n\nOpen the file manually:\n%1\n\nTried commands:\n%2").arg(path).arg(tried.join("\n"));
+
+        // If any attempt succeeded, accept it
+        for (const TriedResult &r : results) if (r.ok) return true;
+
+        // Build diagnostic message
+        QStringList diag;
+        for (const TriedResult &r : results) {
+            diag << QString("Command: %1\nExit: %2\nStdout: %3\nStderr: %4\n").arg(r.cmd).arg(r.exitCode).arg(r.out.isEmpty()?"(none)":r.out).arg(r.err.isEmpty()?"(none)":r.err);
+        }
+        QString sandboxInfo = detectSandbox();
+        if (!sandboxInfo.isEmpty()) sandboxInfo = QString("Environment detected: %1\n\n").arg(sandboxInfo);
+
+        // Auto-copy first suggested command to clipboard for user's convenience
+        QString suggested;
+        if (!tried.isEmpty()) suggested = tried.first();
+        if (!suggested.isEmpty()) {
+            QClipboard *cb = QGuiApplication::clipboard();
+            cb->setText(suggested);
+        }
+
+        QString msg = QString("Unable to launch external application in this environment.\n\nOpen the file manually:\n%1\n\nSuggested command (copied to clipboard):\n%2\n\nDiagnostics:\n%3\n%4").arg(path).arg(suggested).arg(diag.join("\n")).arg(sandboxInfo);
         Logger::instance().log("WARN", QString("Failed to open external file: %1; tried: %2").arg(path).arg(tried.join(", ")));
         QMessageBox::information(parent, "Open File", msg);
         return false;
