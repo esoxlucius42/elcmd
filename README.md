@@ -21,6 +21,7 @@ Logging:
   - QStandardPaths::AppDataLocation/elcmd/elcmd.log (preferred)
   - Fallback: ~/.local/share/elcmd/elcmd.log
 - When file operations fail, the UI shows a concise message and points to the log file for details.
+- F4 behavior: Pressing F4 (now labeled "F4 Open") opens the selected file in the system default viewer/application. If the file is larger than 10 MiB, the app will ask for confirmation before launching the external viewer.
 
 External app launches and sandboxing
 - If the app cannot launch third-party applications the environment may be sandboxed (Flatpak/Snap) or use a desktop portal that restricts execs.

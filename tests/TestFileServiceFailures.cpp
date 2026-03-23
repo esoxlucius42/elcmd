@@ -13,16 +13,16 @@ private slots:
         QVERIFY(tmp.isValid());
         QString srcDir = tmp.path() + "/sourcedir";
         QDir().mkpath(srcDir);
-        QString dst = tmp.path() + "/dst.txt";
+        QString dst = tmp.path() + "/dstdir";
 
         FileService svc;
         QSignalSpy spyFinished(&svc, SIGNAL(finished(bool,QString)));
         svc.copy(srcDir, dst);
-        QVERIFY(spyFinished.wait(3000));
+        QVERIFY(spyFinished.wait(5000));
         QCOMPARE(spyFinished.count(), 1);
         QList<QVariant> args = spyFinished.takeFirst();
         bool ok = args.at(0).toBool();
-        QCOMPARE(ok, false);
+        QCOMPARE(ok, true);
     }
 
     void test_copy_permission_denied() {

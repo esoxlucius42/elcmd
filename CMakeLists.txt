@@ -52,6 +52,10 @@ add_executable(test_fileservice_failures tests/TestFileServiceFailures.cpp)
 target_link_libraries(test_fileservice_failures PRIVATE Qt6::Test core)
 add_test(NAME fileservice_failures_test COMMAND test_fileservice_failures)
 
+add_executable(test_fileservice_dircopy tests/TestFileServiceDirCopy.cpp)
+target_link_libraries(test_fileservice_dircopy PRIVATE Qt6::Test core)
+add_test(NAME fileservice_dircopy_test COMMAND test_fileservice_dircopy)
+
 add_executable(test_paneops tests/TestPaneOps.cpp src/PaneWidget.cpp src/ArchiveViewerDialog.cpp src/ConflictDialog.cpp)
 target_link_libraries(test_paneops PRIVATE Qt6::Test Qt6::Widgets core)
 add_test(NAME paneops_test COMMAND test_paneops)

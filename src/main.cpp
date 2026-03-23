@@ -192,7 +192,7 @@ int main(int argc, char **argv) {
 
     QHBoxLayout *buttonBar = new QHBoxLayout();
     QPushButton *bF3 = new QPushButton("F3 View");
-    QPushButton *bF4 = new QPushButton("F4 Edit");
+    QPushButton *bF4 = new QPushButton("F4 Open");
     QPushButton *bF5 = new QPushButton("F5 Copy");
     QPushButton *bF6 = new QPushButton("F6 Move");
     QPushButton *bF7 = new QPushButton("F7 New Folder");
@@ -264,12 +264,17 @@ int main(int argc, char **argv) {
         dlg.exec();
     });
 
-    // F4: open with default editor/application
+    // F4: open with default system viewer (use default app)
     QObject::connect(bF4, &QPushButton::clicked, [&]() {
-        if (lastPath.isEmpty()) { QMessageBox::information(nullptr, "Edit", "No file selected"); return; }
-        if (!openExternally(lastPath, &win)) {
-            // User has been informed by openExternally; no further action required
+        if (lastPath.isEmpty()) { QMessageBox::information(&win, "Open", "No file selected"); return; }
+        QFile f(lastPath);
+        if (!f.exists()) { QMessageBox::warning(&win, "Open", "File does not exist"); return; }
+        const qint64 limit = 10LL * 1024 * 1024; // 10 MiB
+        if (f.size() > limit) {
+            if (QMessageBox::question(&win, "Open", "File is larger than 10 MiB. Open in external viewer?") != QMessageBox::Yes) return;
         }
+        // open in default viewer/application
+        openExternally(lastPath, &win);
     });
 
     // F5: Copy selected items from active pane to the other pane
