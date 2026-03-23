@@ -26,8 +26,8 @@ PaneWidget::PaneWidget(QWidget *parent) : QWidget(parent) {
     m_view->setSelectionMode(QAbstractItemView::ExtendedSelection);
 
     // basic appearance per request
-    // background and text
-    m_view->setStyleSheet("QTableView { background-color: #222222; color: #00ff00; } QTableView::item:selected { background-color: #000000; color: #ffffff; } QHeaderView::section { border: none; }");
+    // background and text: unselected text bright green, selected text bright red, selected background black
+    m_view->setStyleSheet("QTableView { background-color: #222222; color: #00ff00; } QTableView::item:selected { background-color: #000000; color: #ff0000; } QHeaderView::section { border: none; }");
     m_view->setAlternatingRowColors(false);
     // hide row numbers
     m_view->verticalHeader()->hide();
@@ -146,52 +146,56 @@ void PaneWidget::refresh() {
 }
 
 bool PaneWidget::eventFilter(QObject *obj, QEvent *event) {
-    if (obj == m_view->viewport() && event->type() == QEvent::MouseButtonPress) {
-        QMouseEvent *me = static_cast<QMouseEvent*>(event);
-        if (me->button() == Qt::RightButton) {
-            QModelIndex idx = m_view->indexAt(me->pos());
-            if (idx.isValid()) {
-                QItemSelectionModel *sel = m_view->selectionModel();
-                // behavior depends on preference
-                if (m_rightClickMode == SelectOnRightClick) {
-                    if (!sel->isSelected(idx)) {
-                        sel->select(idx, QItemSelectionModel::Select | QItemSelectionModel::Rows);
-                    }
+    if (obj == m_view->viewport()) {
+        // Mouse press handling
+        if (event->type() == QEvent::MouseButtonPress) {
+            QMouseEvent *me = static_cast<QMouseEvent*>(event);
+            if (me->button() == Qt::RightButton) {
+                QModelIndex idx = m_view->indexAt(me->pos());
+                if (idx.isValid()) {
+                    QItemSelectionModel *sel = m_view->selectionModel();
+                    // start a right-button drag toggle operation
+                    m_rightDragActive = true;
+                    m_rightDragHandledRows.clear();
+                    bool initiallySelected = sel->isSelected(idx);
+                    m_rightDragWillSelect = !initiallySelected; // if clicked on unselected, we will select
+                    // apply to initial row
+                    if (m_rightDragWillSelect) sel->select(idx, QItemSelectionModel::Select | QItemSelectionModel::Rows);
+                    else sel->select(idx, QItemSelectionModel::Deselect | QItemSelectionModel::Rows);
+                    m_rightDragHandledRows.insert(idx.row());
+                    return true; // consume
                 }
-                // if ContextOnSelected and item not selected, select it first then show context menu
-                if (m_rightClickMode == ContextOnSelected && !sel->isSelected(idx)) {
-                    sel->select(idx, QItemSelectionModel::Select | QItemSelectionModel::Rows);
-                }
-
-                // build context menu for selected rows
-                QString name = m_model->data(m_model->index(idx.row(), 0)).toString();
-                QString full = QDir(m_pathEdit->text()).filePath(name);
-
-                QMenu menu(m_view);
-                QAction *aView = menu.addAction("View");
-                QAction *aEdit = menu.addAction("Edit");
-                QAction *aDelete = menu.addAction("Delete");
-                QAction *act = menu.exec(m_view->viewport()->mapToGlobal(me->pos()));
-                if (act == aView) {
-                    // open with default viewer for now
-                    QDesktopServices::openUrl(QUrl::fromLocalFile(full));
-                    return true;
-                } else if (act == aEdit) {
-                    QDesktopServices::openUrl(QUrl::fromLocalFile(full));
-                    return true;
-                } else if (act == aDelete) {
-                    if (QMessageBox::question(this, "Delete", QString("Delete %1?").arg(name)) == QMessageBox::Yes) {
-                        QFile::remove(full);
-                        m_model->setPath(m_pathEdit->text());
-                    }
-                    return true;
-                }
-                return true; // consumed
+            }
+            // left click: let default selection behavior occur, but ensure widget gets focus
+            if (static_cast<QMouseEvent*>(event)->button() == Qt::LeftButton) {
+                this->setFocus();
             }
         }
-        // left click: let default selection behavior occur, but ensure widget gets focus
-        if (me->button() == Qt::LeftButton) {
-            this->setFocus();
+
+        // Mouse move handling (for right-button drag selection)
+        if (event->type() == QEvent::MouseMove) {
+            if (m_rightDragActive) {
+                QMouseEvent *me = static_cast<QMouseEvent*>(event);
+                QModelIndex idx = m_view->indexAt(me->pos());
+                if (idx.isValid() && !m_rightDragHandledRows.contains(idx.row())) {
+                    QItemSelectionModel *sel = m_view->selectionModel();
+                    if (m_rightDragWillSelect) sel->select(idx, QItemSelectionModel::Select | QItemSelectionModel::Rows);
+                    else sel->select(idx, QItemSelectionModel::Deselect | QItemSelectionModel::Rows);
+                    m_rightDragHandledRows.insert(idx.row());
+                }
+                return true; // consume while dragging
+            }
+        }
+
+        // Mouse release handling
+        if (event->type() == QEvent::MouseButtonRelease) {
+            QMouseEvent *me = static_cast<QMouseEvent*>(event);
+            if (me->button() == Qt::RightButton && m_rightDragActive) {
+                // finish drag
+                m_rightDragActive = false;
+                m_rightDragHandledRows.clear();
+                return true; // consume
+            }
         }
     }
     return QWidget::eventFilter(obj, event);

@@ -1,5 +1,6 @@
 #pragma once
 #include <QWidget>
+#include <QSet>
 
 class QTableView;
 class QLineEdit;
@@ -46,4 +47,9 @@ private:
     QPushButton *m_homeBtn;
     QPushButton *m_rootBtn;
     RightClickMode m_rightClickMode = SelectOnRightClick; // default per spec
+
+    // right-click drag/toggle state
+    bool m_rightDragActive{false};
+    bool m_rightDragWillSelect{false};
+    QSet<int> m_rightDragHandledRows;
 };
