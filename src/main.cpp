@@ -19,12 +19,20 @@
 #include <QInputDialog>
 #include <QDir>
 #include <QInputDialog>
+#include <QSettings>
+#include <QCoreApplication>
 #include "PaneWidget.h"
 #include "FileService.h"
 #include "ConflictDialog.h"
 
 int main(int argc, char **argv) {
     QApplication app(argc, argv);
+
+    // Application identity for QSettings
+    QCoreApplication::setOrganizationName("elcmd");
+    QCoreApplication::setApplicationName("elcmd");
+    QSettings settings;
+
     QMainWindow win;
     QWidget *central = new QWidget();
     QHBoxLayout *layout = new QHBoxLayout();
@@ -80,8 +88,13 @@ int main(int argc, char **argv) {
     central->setLayout(mainLayout);
 
     win.setCentralWidget(central);
+
+    // restore saved size (fallback to 1000x800)
+    QSize savedSize = settings.value("mainWindow/size", QSize(1000, 800)).toSize();
+    bool wasMax = settings.value("mainWindow/maximized", false).toBool();
+
     win.setMinimumSize(1000, 800);
-    win.resize(1000, 800);
+    win.resize(savedSize);
 
     // wire F5 -> copy as example
     FileService *svc = new FileService(&win);
@@ -224,6 +237,16 @@ int main(int argc, char **argv) {
         active->refresh();
     });
 
-    win.show();
+    // Save size and maximized state on exit
+    QObject::connect(&app, &QApplication::aboutToQuit, [&]() {
+        QSize toSave = win.isMaximized() ? win.normalGeometry().size() : win.size();
+        settings.setValue("mainWindow/size", toSave);
+        settings.setValue("mainWindow/maximized", win.isMaximized());
+    });
+
+    // Show window (restore maximized state if needed)
+    if (wasMax) win.showMaximized();
+    else win.show();
+
     return app.exec();
 }
