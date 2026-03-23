@@ -24,6 +24,7 @@
 #include "PaneWidget.h"
 #include "FileService.h"
 #include "ConflictDialog.h"
+#include "Logger.h"
 
 int main(int argc, char **argv) {
     QApplication app(argc, argv);
@@ -50,9 +51,9 @@ int main(int argc, char **argv) {
     QString lastPath;
 
     auto setActive = [&](PaneWidget *p){
-        if (active && active != p) active->setActive(false);
+        // Do not call PaneWidget::setActive here. Only update the active pointer and give it focus.
         active = p;
-        if (active) { active->setActive(true); active->focusView(); }
+        if (active) active->focusView();
     };
 
     // set initial active pane
@@ -175,8 +176,11 @@ int main(int argc, char **argv) {
             QProgressDialog pd(QString("Copying %1").arg(QFileInfo(src).fileName()), "Cancel", 0, 100, &win);
             pd.setWindowModality(Qt::WindowModal);
             QObject::connect(&pd, &QProgressDialog::canceled, svc, &FileService::cancel);
-            QObject::connect(svc, &FileService::progress, [&](qint64 done, qint64 total){ if (total>0) pd.setValue(int(100*done/total)); });
-            QObject::connect(svc, &FileService::finished, [&](bool ok, const QString &msg){ if (!ok) QMessageBox::warning(nullptr, "Copy failed", msg); });
+            QObject::connect(svc, &FileService::progress, &pd, [&](qint64 done, qint64 total){ if (total>0) pd.setValue(int(100*done/total)); });
+            QObject::connect(svc, &FileService::finished, &win, [&](bool ok, const QString &reason){ if (!ok) {
+                    QString full = QString("Failed to copy %1: %2\nSee log: %3").arg(QFileInfo(src).fileName()).arg(reason).arg(Logger::instance().logFilePath());
+                    QMessageBox::warning(&win, "Copy failed", full);
+                } });
             svc->copy(src, dst);
             pd.exec();
         }
@@ -207,8 +211,11 @@ int main(int argc, char **argv) {
                 QProgressDialog pd(QString("Moving %1").arg(QFileInfo(src).fileName()), "Cancel", 0, 100, &win);
                 pd.setWindowModality(Qt::WindowModal);
                 QObject::connect(&pd, &QProgressDialog::canceled, svc, &FileService::cancel);
-                QObject::connect(svc, &FileService::progress, [&](qint64 done, qint64 total){ if (total>0) pd.setValue(int(100*done/total)); });
-                QObject::connect(svc, &FileService::finished, [&](bool ok, const QString &msg){ if (!ok) QMessageBox::warning(nullptr, "Move failed", msg); });
+                QObject::connect(svc, &FileService::progress, &pd, [&](qint64 done, qint64 total){ if (total>0) pd.setValue(int(100*done/total)); });
+                QObject::connect(svc, &FileService::finished, &win, [&](bool ok, const QString &reason){ if (!ok) {
+                        QString full = QString("Failed to move %1: %2\nSee log: %3").arg(QFileInfo(src).fileName()).arg(reason).arg(Logger::instance().logFilePath());
+                        QMessageBox::warning(&win, "Move failed", full);
+                    } });
                 svc->copy(src, dst);
                 pd.exec();
                 QFile::remove(src);

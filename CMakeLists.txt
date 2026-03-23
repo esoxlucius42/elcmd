@@ -48,6 +48,10 @@ add_executable(test_fileservice tests/TestFileService.cpp)
 target_link_libraries(test_fileservice PRIVATE Qt6::Test core)
 add_test(NAME fileservice_test COMMAND test_fileservice)
 
+add_executable(test_fileservice_failures tests/TestFileServiceFailures.cpp)
+target_link_libraries(test_fileservice_failures PRIVATE Qt6::Test core)
+add_test(NAME fileservice_failures_test COMMAND test_fileservice_failures)
+
 add_executable(test_paneops tests/TestPaneOps.cpp src/PaneWidget.cpp src/ArchiveViewerDialog.cpp src/ConflictDialog.cpp)
 target_link_libraries(test_paneops PRIVATE Qt6::Test Qt6::Widgets core)
 add_test(NAME paneops_test COMMAND test_paneops)
@@ -64,4 +68,7 @@ install(DIRECTORY src/ DESTINATION share/elcmd)
 set(CPACK_PACKAGE_NAME "elcmd")
 set(CPACK_PACKAGE_VERSION ${PROJECT_VERSION})
 set(CPACK_GENERATOR "TGZ")
+add_executable(run_copy src/run_copy.cpp)
+target_link_libraries(run_copy PRIVATE Qt6::Core Qt6::Concurrent core)
+
 include(CPack)
